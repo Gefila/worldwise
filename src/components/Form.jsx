@@ -1,64 +1,102 @@
 // "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=0&longitude=0"
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import styles from "./Form.module.css";
 import Button from "./Button";
 import { useNavigate } from "react-router-dom";
 import BackButton from "./BackButton";
+import usePositionUrl from "../hooks/usePositionUrl";
+import Message from "./Message";
 
 export function convertToEmoji(countryCode) {
-	const codePoints = countryCode
-		.toUpperCase()
-		.split("")
-		.map((char) => 127397 + char.charCodeAt());
-	return String.fromCodePoint(...codePoints);
+    const codePoints = countryCode
+        .toUpperCase()
+        .split("")
+        .map((char) => 127397 + char.charCodeAt());
+    return String.fromCodePoint(...codePoints);
 }
 
 function Form() {
-	const [cityName, setCityName] = useState("");
-	const [country, setCountry] = useState("");
-	const [date, setDate] = useState(new Date());
-	const [notes, setNotes] = useState("");
+    const [lat, lng] = usePositionUrl();
+    const navigate = useNavigate();
 
-	return (
-		<form className={styles.form}>
-			<div className={styles.row}>
-				<label htmlFor="cityName">City name</label>
-				<input
-					id="cityName"
-					onChange={(e) => setCityName(e.target.value)}
-					value={cityName}
-				/>
-				{/* <span className={styles.flag}>{emoji}</span> */}
-			</div>
+    const [isLoadingGeocoding, setIsLoadingGeocoding] = useState(false);
+    const BASE_URL = "https://api.bigdatacloud.net/data/reverse-geocode-client";
+    const [cityName, setCityName] = useState("");
+    const [country, setCountry] = useState("");
+    const [date, setDate] = useState(new Date());
+    const [notes, setNotes] = useState("");
+    const [emoji, setEmoji] = useState("");
+    const [geoCodingError, setGeoCodingError] = useState("");
 
-			<div className={styles.row}>
-				<label htmlFor="date">When did you go to {cityName}?</label>
-				<input
-					id="date"
-					onChange={(e) => setDate(e.target.value)}
-					value={date}
-				/>
-			</div>
+    useEffect(() => {
+        async function fetchCityData() {
+            try {
+                setIsLoadingGeocoding(true);
+                setGeoCodingError("");
+                const res = await fetch(
+                    `${BASE_URL}?latitude=${lat}&longitude=${lng}`
+                );
+                const data = await res.json();
+                if (!data.countryCode) {
+                    throw new Error("Country code not found");
+                }
+                setCityName(data.city || data.locality || "");
+                setCountry(data.countryName || "");
+                setEmoji(convertToEmoji(data.countryCode || ""));
+            } catch (error) {
+                setGeoCodingError(error.message);
+                console.error("Error fetching city data:", error);
+            } finally {
+                setIsLoadingGeocoding(false);
+            }
+        }
+        fetchCityData();
+    }, [lat, lng]);
 
-			<div className={styles.row}>
-				<label htmlFor="notes">
-					Notes about your trip to {cityName}
-				</label>
-				<textarea
-					id="notes"
-					onChange={(e) => setNotes(e.target.value)}
-					value={notes}
-				/>
-			</div>
+    if (isLoadingGeocoding) return <Message message="Loading city data..." />;
 
-			<div className={styles.buttons}>
-				<Button type="primary">Add</Button>
-				<BackButton />
-			</div>
-		</form>
-	);
+    if (geoCodingError) return <Message message={geoCodingError} />;
+
+    return (
+        <form className={styles.form}>
+            <div className={styles.row}>
+                <label htmlFor="cityName">City name</label>
+                <input
+                    id="cityName"
+                    onChange={(e) => setCityName(e.target.value)}
+                    value={cityName}
+                />
+                {/* <span className={styles.flag}>{emoji}</span> */}
+            </div>
+
+            <div className={styles.row}>
+                <label htmlFor="date">When did you go to {cityName}?</label>
+                <input
+                    id="date"
+                    onChange={(e) => setDate(e.target.value)}
+                    value={date}
+                />
+            </div>
+
+            <div className={styles.row}>
+                <label htmlFor="notes">
+                    Notes about your trip to {cityName}
+                </label>
+                <textarea
+                    id="notes"
+                    onChange={(e) => setNotes(e.target.value)}
+                    value={notes}
+                />
+            </div>
+
+            <div className={styles.buttons}>
+                <Button type="primary">Add</Button>
+                <BackButton />
+            </div>
+        </form>
+    );
 }
 
 export default Form;
